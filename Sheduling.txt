@@ -1,0 +1,589 @@
+KODEKLOUD SCHEDULING
+=======================
+
+Manual Scheduling
+------------------
+You can assign a pod to a specific node
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+  labels:
+    name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+	ports:
+	  - containerPort: 8080
+  nodeName: node02
+---
+You can also bind a pod to a node using a binding object
+
+apiVersion: v1
+kind: Binding
+metadata:
+  name: nginx
+target:
+  apiVersion: v1
+  kind: Node
+  name: node02
+
+You need to convert this to json format and send over as an API request
+
+Labels and Selectors
+---------------------
+
+Labels in pod definition metadata, you can add as many labels as you want
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp
+  labels:
+    app: App1
+	function: Front-end
+spec:
+  containers:
+  - name: simple-webapp
+    image: simple-webapp
+	ports:
+	  - containerPort: 8080
+	  
+> kubectl get pods --selector app=App1
+
+Selectors can also be used in replicasets to group pods
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: simple-webapp
+  labels:
+    app: App1
+	function: Front-end
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+	  app: App1
+  template:
+    metadata:
+	  labels:
+	    app: App1
+		function: Front-end
+	spec:
+	  containers:
+	  - name: simple-webapp
+	    image: simple-webapp
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-service
+spec:
+  selector:
+    app: App1
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 9376
+	
+Annotations
+------------
+
+Annotations are used to pass some informations to objects, build version, email, author...etc
+---
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: simple-webapp
+  labels:
+    app: App1
+	function: Front-end
+  annotations:
+    buildversion: 1.34
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+	  app: App1
+  template:
+    metadata:
+	  labels:
+	    app: App1
+		function: Front-end
+	spec:
+	  containers:
+	  - name: simple-webapp
+	    image: simple-webapp
+---
+> kubectl get pod --selector env=prod,bu=finance,tier=frontend
+> kubectl get pod --selector env=prod,bu=finance,tier=frontend --no-headers | wc -l 
+
+
+Taints and Tolerations
+----------------------
+
+Taints are set on nodes
+Tolerations are set on pods
+
+> kubectl taint nodes node-name key=value:taint-effect
+
+taint-effect is what happens to the pod if they do not tolerate de taint, it can be
+NoSchedule | PreferNoSchedule | NoExecute
+
+> kubectl taint node node1 app=blue:NoSchedule
+> kubectl taint node node01 spray=mortein:NoSchedule
+
+Tolerations are added to pods
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+	function: Tainted_App
+spec:
+  containers:
+  - name: nginx-containter
+    image: nginx
+	ports:
+	  - containerPort: 8080
+  tolerations:
+  - key: app
+    operator: "Equal"
+	value: blue
+	effect: NoSchedule
+
+
+Master Node
+
+> kubectl describe node kubemaster | grep Taint
+Taints:					node-role.kubernetes.io/master:NoSchedule
+
+
+kubectl taint nodes controlplane node-role.kubernetes.io/master:NoSchedule-
+
+
+Ressource Limits
+----------------
+
+By default, pod usage is 0.5 CPU and 256 Mi memory
+These can be specified in pod or deployement file
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+  labels:
+    name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+	ports:
+	  - containerPort: 8080
+	resources:
+	  requests:
+	    memory: "1Gi"
+		cpu: 1
+
+By default, kubernetes sets the following limits
+1 CPU
+512 Mi
+you can specify new limits the following way
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+  labels:
+    name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+	ports:
+	  - containerPort: 8080
+	resources:
+	  requests:
+	    memory: "1Gi"
+		cpu: 1
+	  limits:
+	    memory: "2Gi"
+		cpu: 2
+		
+PODs can not exceed CPU limits but can exceed memory limits
+
+Ressource requirements
+-----------------------
+
+n the previous lecture, I said – “When a pod is created the containers are assigned a default CPU request of .5 and memory of 256Mi”. For the POD to pick up those defaults you must have first set those as default values for request and limit by creating a LimitRange in that namespace.
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mem-limit-range
+spec:
+  limits:
+  - default:
+      memory: 512Mi
+    defaultRequest:
+      memory: 256Mi
+    type: Container
+https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/memory-default-namespace/
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-limit-range
+spec:
+  limits:
+  - default:
+      cpu: 1
+    defaultRequest:
+      cpu: 0.5
+    type: Container
+https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/cpu-default-namespace/
+
+References:
+
+https://kubernetes.io/docs/tasks/configure-pod-container/assign-memory-resource
+
+
+Node Selectors
+--------------
+
+Label a node
+> kubectl label nodes <node-name> <label-key>=<label-value>
+
+> kubectl label nodes node-1 size=Large
+
+create a pod with a node selector
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers:
+  - name: data-processor
+    image: data-processor
+  nodeSelector:
+    size: Large
+---
+kubectl create -f pod-definition.yml
+
+Node Affinity
+--------------
+
+To ensure that pods are hosted on particular nodes, use affinity
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+spec:
+  containers:
+  - name: data-processor
+    image: data-processor
+  affinity:
+    nodeAffinity:
+	  requredDuringSchedulingIgnoredDuringExecution:
+	    nodeSelectorTerms:
+		- matchExpressions:
+		  - key: size
+		    operator: In
+			values:
+			- Large
+---
+
+operator : In, NotIn, Exists(does not need value), DoesNotExist, Gt, Lt 
+
+Node Affinity Types
+Available
+
+requiredDuringSchedulingIgnoredDuringExecution
+preferredDuringSchedulingIgnoredDuringExecution
+
+
+Planned
+
+requiredDuringSchedulingRequiredDuringExecution
+preferredDuringSchedulingRequiredDuringExecution
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: nginx
+  template:
+    metadata:
+      labels:
+        run: nginx
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: color
+                operator: In
+                values:
+                - blue
+---
+
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: nginx
+  template:
+    metadata:
+      labels:
+        run: nginx
+    spec:
+      containers:
+      - image: nginx
+        imagePullPolicy: Always
+        name: nginx
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: Exists
+---
+
+Resource Limits
+---------------
+
+By defaults every request for pods is
+CPU : 0.5 or 500m OR 1vCPU
+Mem : 256 Mi 
+
+By defaults, k8s sets limits per pods
+CPU : 1vCPU
+Mem: 512 Mi 
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+  labels:
+    name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+    ports:
+	  - containerPort: 8080
+	resources:
+	  requests:
+	    memory: "1Gi"
+		cpu: 1
+	  limits:
+	    memory: "2Gi"
+		cpu: 2
+---
+
+Pods can not use more memory than limited
+They can try to use more memory than limited, then they a terminated
+
+In the previous lecture, I said – “When a pod is created the containers are assigned a default CPU request of .5 and memory of 256Mi”. For the POD to pick up those defaults you must have first set those as default values for request and limit by creating a LimitRange in that namespace.
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: mem-limit-range
+spec:
+  limits:
+  - default:
+      memory: 512Mi
+    defaultRequest:
+      memory: 256Mi
+    type: Container
+https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/memory-default-namespace/
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: cpu-limit-range
+spec:
+  limits:
+  - default:
+      cpu: 1
+    defaultRequest:
+      cpu: 0.5
+    type: Container
+https://kubernetes.io/docs/tasks/administer-cluster/manage-resources/cpu-default-namespace/
+
+References:
+
+https://kubernetes.io/docs/tasks/configure-pod-container/assign-memory-resource
+
+
+Edit a POD
+Remember, you CANNOT edit specifications of an existing POD other than the below.
+
+spec.containers[*].image
+spec.initContainers[*].image
+spec.activeDeadlineSeconds
+spec.tolerations
+
+
+DaemonSets
+==========
+
+Helps deploy pods in all nodes of a cluster
+
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: monitoring-daemon
+spec:
+  selector:
+    matchLabels:
+	  app: monitoring-agent
+  template:
+    metadata:
+	  labels:
+	    app: monitoring-agent
+	spec:
+	  containers:
+	  - name: monitoring-agent
+	    image: monitoring-agent
+---
+
+kubectl create daemonset elasticsearch -n kube-system --image= k8s.gcr.io/fluentd-elasticsearch:1.20
+
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    app: elasticsearch
+  name: elasticsearch
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - image: k8s.gcr.io/fluentd-elasticsearch:1.20
+        name: fluentd-elasticsearch
+---
+
+Static Pods
+-----------
+
+/etc/kubernetes/manifest
+
+All pod definition found in the folder are started by the kubelet on the node
+
+Only pods can be created this way, kubelet works at the pod layer
+
+kubelet.service
+
+ExecStart=/usr/local/bin/kubelet \\
+...
+--config=kubeconfig.yaml  \\
+...
+
+kubeconfig.yaml
+staticPodPath: /etc/kubernetes/manifest
+
+kubectl run nginx --image=nginx --command -- <cmd> <arg1> ... <argN>
+
+
+Multiple Schedulers
+--------------
+
+default-scheduler.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kube-scheduler
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - kube-scheduler
+	- --address: 127.0.0.1
+	- --kubeconfig=/etc/kubernetes/scheduler.config
+	- --leader-elect=true
+	image: k8s.gcr.io/kube-scheduler=amd64:v1.11.3
+	name: kube-scheduler
+---
+
+custom-scheduler.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: my-custom-scheduler
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - kube-scheduler
+	- --address: 127.0.0.1
+	- --kubeconfig=/etc/kubernetes/scheduler.config
+	- --leader-elect=true
+	- --scheduler-name=my-custom-scheduler
+	- --lock-object-name=my-custom-scheduler
+	image: k8s.gcr.io/kube-scheduler=amd64:v1.11.3
+	name: kube-scheduler
+
+create the pod custome-schduler.yaml
+Now configure the pod to use the new scheduler
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: simple-webapp-color
+  labels:
+    name: simple-webapp-color
+spec:
+  containers:
+  - name: simple-webapp-color
+    image: simple-webapp-color
+  schedulerName: my-custom-scheduler
+---
+
+view events
+
+> kubectl get events 
+
+> kubectl get logs kube-scheduler -n kube-system
+
+
+
+
+

@@ -1,0 +1,663 @@
+Security ---------
+
+
+Security Primitives
+
+> Password based authentication disabled
+> SSH Key based authentication enabled
+
+First line of defense is controling access to the kube-apiserver
+
+
+Authentication
+----------------
+
+All user access is managed by the kube-apiserver
+
+You can create a file (password, username, userid,group) and use it as user auth file
+
+TLS Certificates
+-------------------
+
+
+Generating certificates for the server
+-------------------------------------------
+
+
+#CA certification
+
+Generate keys
+> openssl genrsa -out ca.key 2048bj
+ca.key
+
+Certificate Signing Request
+> openssl req -new -key ca.key -subj "/CN=KUBERNETES-CA" -out ca.csr
+ca.csr
+
+Sign Certificates
+> openssl x509 -req -in ca.csr -signkey ca.key -out ca.crt
+ca.crt
+
+#Generating Client certificate (Admin User)
+
+Generated key
+> openssl genrsa -out admin.key 2048
+admin.key
+
+Certificated signing request
+> openssl req -new -key admin.key -subj "/CN=kube-admin/O=system:masters" -out admin.csr
+admin.csr
+
+Sign Certificates
+>  openssl x509 -req -in admin.csr -CA ca.crt -CAKey ca.key -out admin.crt
+admin.crt 
+
+To check certificates
+> openssl x509 -in /var/lib/kubelet/worker-1.crt -text
+
+
+Server side certificates
+--------------------------
+
+#Etcd server
+
+#kube-api server
+
+> openssl genrsa -out apiserver.key 2048
+apiserver.key
+
+> openssl req -new -key apiserver.key -subj "/CN=kube-apiserver" -out apiserver.csr -config openssl.cnf
+apiserver.csr
+
+openssl.cnf
+[req]
+req_Extensions = v3_req
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation,
+subjectAltName =  @alt_names
+[alt_names]
+DNS.1 = kubernetes
+DNS.2 = kubernetes.default
+DNS.3 = kubernetes.default.svc
+DNS.4 = kubernetes.default.svc.cluster.local
+IP.1 = 10.96.0.1
+IP.2 = 172.17.0.87
+
+> openssl x509 -req -in apiserver.csr -CA ca.crt -CAKey ca.key -out apiserver.crt
+apiserver.crt
+
+
+View certificate details
+---------------------------
+
+Health check of the cluster
+
+"The Hard Way"
+
+> cat /etc/systemd/system/kube-apiserver.service
+
+"Kubeadm"
+
+> cat /etc/kubernetes/manifest/kube-apiserver.yaml
+
+View certificate details
+
+> openssl x509 -in /etc/kubernetes/pki/apiserver.crt -text -noout
+
+Inspect service logs
+
+> kubectl logs etcd-master
+
+Certificate health check spreadsheet
+
+https://github.com/mmumshad/kubernetes-the-hard-way/tree/master/tools
+
+NR9QW-FJ3YK-XDHVD-XTQTQ-YBH7M 
+
+
+
+Certificate API
+----------------
+
+Jane a new admin joins the team !!!
+
+She create her private key and csr
+> openssl genrsa -out jane.key 2048
+
+She generates the csr
+> openssl req -new -key jane.key -subj "/CN=jane" -out  jane.csr
+
+The admin takes the key and generated a certificate signing request object
+
+apiVersion: certificates.k8s.io/v1
+kind: CertificateSigningRequest
+metadata:
+  name: akshay
+spec:
+  groups:
+  - system:authenticated
+  request: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlJQ1ZqQ0NBVDRDQVFBd0VURVBNQTBHQTFVRUF3d0dZV3R6YUdGNU1JSUJJakFOQmdrcWhraUc5dzBCQVFFRgpBQU9DQVE4QU1JSUJDZ0tDQVFFQXY4azZTTE9HVzcrV3JwUUhITnI2TGFROTJhVmQ1blNLajR6UEhsNUlJYVdlCmJ4RU9JYkNmRkhKKzlIOE1RaS9hbCswcEkwR2xpYnlmTXozL2lGSWF3eGVXNFA3bDJjK1g0L0lqOXZQVC9jU3UKMDAya2ZvV0xUUkpQbWtKaVVuQTRpSGxZNDdmYkpQZDhIRGFuWHM3bnFoenVvTnZLbWhwL2twZUVvaHd5MFRVMAo5bzdvcjJWb1hWZTVyUnNoMms4dzV2TlVPL3BBdEk4VkRydUhCYzRxaHM3MDI1ZTZTUXFDeHUyOHNhTDh1blJQCkR6V2ZsNVpLcTVpdlJNeFQrcUo0UGpBL2pHV2d6QVliL1hDQXRrRVJyNlMwak9XaEw1Q0ErVU1BQmd5a1c5emQKTmlXbnJZUEdqVWh1WjZBeWJ1VzMxMjRqdlFvbndRRUprNEdoayt2SU53SURBUUFCb0FBd0RRWUpLb1pJaHZjTgpBUUVMQlFBRGdnRUJBQi94dDZ2d2EweWZHZFpKZ1k2ZDRUZEFtN2ZiTHRqUE15OHByTi9WZEdxN25oVDNUUE5zCjEwRFFaVGN6T21hTjVTZmpTaVAvaDRZQzQ0QjhFMll5Szg4Z2lDaUVEWDNlaDFYZnB3bnlJMVBDVE1mYys3cWUKMkJZTGJWSitRY040MDU4YituK24wMy9oVkN4L1VRRFhvc2w4Z2hOaHhGck9zRUtuVExiWHRsK29jQ0RtN3I3UwpUYTFkbWtFWCtWUnFJYXFGSDd1dDJveHgxcHdCdnJEeGUvV2cybXNqdHJZUXJ3eDJmQnErQ2Z1dm1sVS9rME4rCml3MEFjbVJsMy9veTdqR3ptMXdqdTJvNG4zSDNKQ25SbE41SnIyQkZTcFVQU3dCL1lUZ1ZobHVMNmwwRERxS3MKNTdYcEYxcjZWdmJmbTRldkhDNnJCSnNiZmI2ZU1KejZPMUU9Ci0tLS0tRU5EIENFUlRJRklDQVRFIFJFUVVFU1QtLS0tLQo=
+  signerName: kubernetes.io/kube-apiserver-client
+  usages:
+  - client auth
+	
+	
+	## Base64 encode text of the csr got from >> cat jane.csr | base64
+	
+All certificate signing requests can be seen by the administrator using the command
+> kubectl get csr
+
+Certicate signing requests can be approved via
+> kubectl certificate approve jane
+
+The certificated can be viewed in yaml format
+> kubectl get csr jane -o yaml
+
+Decode the csr into plain text format and share with the user
+> echo "LS0...Qo=" | base64 --decode
+
+
+KubeConfig
+---------------
+
+$HOME/.kube/config
+
+> kubectl config view
+
+> kubectl config view --kubeconfig=mycustom-config
+
+apiVersion: v1
+kind: Config
+
+clusters:
+- name: production
+  cluster:
+    certificate-authority: /etc/kubernetes/pki/ca.crt
+	server: https://172.17.0.51:6443
+	
+contexts:
+- name: admin@production
+  context:
+    cluster: production
+	user: admin
+	namespace: finance
+	
+users:
+- name: admin
+  user:
+    client-certificate: admin.crt
+	client-key: admin.key
+	
+Switching contexts
+> kubectl config --kubeconfig=/root/my-kube-config use-context research
+
+Making my-kube-config the default kubeconfig
+> copy the new config file to the $HOME/.kube/config and replace it
+
+
+/etc/kubernetes/pki/users/dev-user/developer-user.crt
+
+
+API Groups
+----------
+
+/api - core groups
+
+/apis - named groups  **
+
+> kubectl proxy
+Starting to server on 127.0.01:8001
+
+curl http://localhost:8001 -k
+
+curl http://localhost:8001 -k | grep "name"
+ 
+ 
+Authorization
+---------------
+
+  view, edit, delete
+  
+ Node Authorization
+ Attribute Base Access Control
+ Role Based Access Controls
+ Webhook
+ 
+Authorization Mode
+	AlwaysAllow
+	AlwaysDeny
+	
+Role Based Access Control
+-----------------------------
+
+apiVersion: rban.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+- apiGroups: [""]
+  ressources  ["pods"]
+  verbs: ["list","get","create","update","delete:"]
+ 
+- apiGroups: [""]
+  ressources  ["ConfigMap"]
+  verbs: ["create"]
+  
+------
+ 
+apiVersion: rban.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: developer
+rules:
+- apiGroups: [""]
+  ressources  ["pods"]
+  verbs: ["list","get","create","update","delete:"]
+  resourceNames: ["blue", "orange"]
+  
+kubectl create -f developer-role.yaml
+
+Link the user to the role, with a RoleBinding
+
+apiVersion: rbac.athorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devuser-developer-binding
+subjects:
+- kind: User
+  name: dev-user
+  apiGroup: rbac.athorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbanc.authorixation.k8s.
+  
+
+>kubectk create -f devuser-do.yaml
+
+To view created role
+> kubectl get roles
+> Kubectl get rolebinding
+> kubectl describe rolebinding
+> kubectl descibe role developer
+
+Check Access
+> kubectl auth can-i create deployments
+nonRepudiation
+
+Check access as another user 
+>kubectl auth can-i createPod --as dev-ser
+
+kubectl get pods --as dev-user
+
+------- PRACTICE ---------
+
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: default
+  name: developer
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list", "create"]
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-user-binding
+subjects:
+- kind: User
+  name: dev-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer
+  apiGroup: rbac.authorization.k8s.io
+
+
+kubectl edit role developer -n blue
+
+
+==
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: blue
+  name: deploy-role
+rules:
+- apiGroups: ["apps", "extensions"]
+  resources: ["deployments"]
+  verbs: ["create"]
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-user-deploy-binding
+  namespace: blue
+subjects:
+- kind: User
+  name: dev-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: deploy-role
+  apiGroup: rbac.authorization.k8s.io
+
+
+
+Another
+
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: blue
+  name: deploy-role
+rules:
+- apiGroups: ["apps", "extensions"]
+  resources: ["deployments"]
+  verbs: ["create"]
+
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-user-deploy-binding
+  namespace: blue
+subjects:
+- kind: User
+  name: dev-user
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: deploy-role
+  apiGroup: rbac.authorization.k8s.io
+  
+
+Cluster Roles
+----------------
+
+Just like roles, they are for cluster wide permissions
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cluster-administrator
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["list","get","create","delete"]
+  
+> kubectl create -f cluster-role-admin.yaml
+
+Create the cluster role binding
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-admin-role-binding
+subject:
+- kind: User
+  name: michelle
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: cluster-administrator
+  apiGroup: rbac.authorization.k8s.io
+
+> kubectl create -f cluster-admin-role-binding.yaml
+
+
+#Rbac for Michelle
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: node-admin
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list", "create", "delete"]
+
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: michelle-binding
+subjects:
+- kind: User
+  name: michelle
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: node-admin
+  apiGroup: rbac.authorization.k8s.io
+
+
+kubectl auth can-i list nodes --as michelle
+
+
+michelle's responsibilities are growing and now she will be responsible for storage as well. 
+Create the required ClusterRoles and ClusterRoleBindings to allow her access to Storage.
+
+Get the API groups and resource names from command kubectl api-resources. Use the given spec:
+
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: storage-admin
+rules:
+- apiGroups: [""]
+  resources: ["persistentvolumes"]
+  verbs: ["get", "watch", "list", "create", "delete"]
+- apiGroups: [""]
+  resources: ["storageclasses"]
+  verbs: ["get", "watch", "list", "create", "delete"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: michelle-storage-admin
+subjects:
+- kind: User
+  name: michelle
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: ClusterRole
+  name: storage-admin
+  apiGroup: rbac.authorization.k8s.io
+  
+  
+ --------------   SERVICE ACCOUNTS --------------
+ 
+To create a service account
+> kubectl create serviceaccount dashboard-sa
+
+To view a service account
+> kubectl get serviceaccount
+
+when a serivce account is created it create a service account token
+
+(Retake this chapter) 
+
+
+--------------- Image Security -------------
+
+How to login to a private registry from docker point of view
+> docker login private-registry.io
+> docker run private-registry.io/app/internal-app/
+
+How does kubernetes know the credentials to the private registrey
+1. Create a secret
+
+> kubectl create secret docker-registry private-reg-cred  --docker-server=myprivateregistry.com:5000 --docker-username=dock_user --docker-password=dock_password --docker-email=dock_user@myprivateregistry.com 
+	
+2. Add that into the pod definition
+
+apiVersion: v1
+kind: Pod
+metadata:
+	name: nginx-pod
+spec:
+	containers:
+	- name: nginx-pod
+	  image: private-registry.io/apps/internal-app/
+	imagePullSecrets:
+	- name: regcred
+	
+------------------ Security in Docker ------------
+
+
+/usr/include/linux/capability.h
+
+------------ Security Context ----------------
+
+> docker run --user=1001 ubuntu sleep 1200
+
+> docker run --cap-add MAC_ADMIN ubuntu
+
+# Context at pod level
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-prod
+spec:
+  securityContext:
+	    runAsUser: 1010
+  containers:
+    - name: ubuntu
+	  image: ubuntu
+	  command: ["sleep","3600"]
+	  
+# Context at container level
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-prod
+spec:
+  containers:
+    - name: ubuntu
+	  image: ubuntu
+	  command: ["sleep","3600"]
+	  securityContext:
+	    runAsUser: 1000
+		capabilities:
+		  add: ["MAC_ADMIN"]
+
+> kubectl exec ubuntu-sleeper whoami
+
+
+piVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper
+  namespace: default
+spec:
+  securityContext:
+    runAsUser: 1010
+  containers:
+  - command:
+    - sleep
+    - "4800"
+    image: ubuntu
+    name: ubuntu-sleeper
+	
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper
+  namespace: default
+spec:
+  securityContext:
+    runAsUser: 1010
+  containers:
+  - command:
+    - sleep
+    - "4800"
+    image: ubuntu
+    name: ubuntu-sleeper
+	
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper
+  namespace: default
+spec:
+  containers:
+  - command:
+    - sleep
+    - "4800"
+    image: ubuntu
+    name: ubuntu-sleeper
+    securityContext:
+      capabilities:
+        add: ["SYS_TIME"]
+		
+-------------	Network Policies	-------
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: db-policy
+spec:
+  podSelector:
+    matchLabels:
+	  role: db
+	policyTypes:
+	- Ingress
+	ingress:
+	- from:
+	  - podSelector:
+	    matchLabels:
+		  name: api-pod
+      ports:
+	  - protocol: TCP
+	  port: 3306
+	  
+kubectl create -f netpolicy.yaml
+
+NB : Flannel do not support Network Policies
+
+
+--------- Network Policies  -------- (READ AGAIN)
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  maeta: db-policy
+spec:
+  podSelector:
+    matchLLabels:
+	  role: db
+
+    policyTypes
+	- ingress
+	
+	ingress:
+	- from:
+	 - podSelector:
+	   matchlabels
+	   name: api-prod
+	   namespaceSelector:
+	     matchLabels:
+		   name: prod
+	
+	ipBlock: 192.168.5.10/42
+	
+	ports:
+	-  protocol: TCP
+	   PORT: 3306
+	   
+	   
+Reference: https://github.com/ahmetb/kubectx

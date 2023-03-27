@@ -1,0 +1,331 @@
+
+
+
+
+
+
+
+
+
+
+
+
+Operate ETCD
+==================
+
+ETCD is a distributed reliable key-value store that is simple, secure and fast
+
+ETCD service listens on port 2379 by default
+ 
+To put in elements in the etcd
+> ./etcdctl set key1 value1
+
+To retrieve data
+> ./etcdctl get key1
+
+kubeadm reploys etcd as a pod.
+To view all keys stored by the etcd cluster, run the following command
+
+> kubectl exec etcd-master -n kube-system etcdctl get / --prefix -keys-only
+
+To set the right version of API set the environment variable ETCDCTL_API command
+
+export ETCDCTL_API=3
+
+When API version is not set, it is assumed to be set to version 2. And version 3 commands listed above don’t work. When API version is set to version 3, version 2 commands listed above don’t work.
+
+Apart from that, you must also specify path to certificate files so that ETCDCTL can authenticate to the ETCD API Server. The certificate files are available in the etcd-master at the following path. We discuss more about certificates in the security section of this course. So don’t worry if this looks complex:
+
+–cacert /etc/kubernetes/pki/etcd/ca.crt
+–cert /etc/kubernetes/pki/etcd/server.crt
+–key /etc/kubernetes/pki/etcd/server.key
+
+So for the commands I showed in the previous video to work you must specify the ETCDCTL API version and path to certificate files. Below is the final form:
+
+kubectl exec etcd-master -n kube-system — sh -c “ETCDCTL_API=3 etcdctl get / –prefix –keys-only –limit=10 –cacert /etc/kubernetes/pki/etcd/ca.crt –cert /etc/kubernetes/pki/etcd/server.crt –key /etc/kubernetes/pki/etcd/server.key”
+
+
+
+Kube API Server
+============
+
+1. Authenticate User
+2. Validate Request
+3. Retreive data
+4. Update ETCD
+5. Scheduler
+6. Kubelet
+
+This is the only component that communicates directly with the etcd cluster
+
+kubeadm deploys the kube api server as a pod within the cluster
+You can view the options within a pod by checking the initial configuration files : /etc/kubernetes/manifest/kube-apiserver.yaml
+
+
+Kube Controller Manager (Node Controller + Replication Controller )
+=======================
+
+It manages containers that are damaged and broken objects. It continuosly monitors the state of objects on the cluster and works in bringing the system to the desired state
+
+- Watch Status
+- Remediate Situation
+
+Node MOnitor Period = 5s
+Node Monitor Grace Period = 40s
+POD Eviction Timeout = 5m
+
+> Replication controller
+
+With kubeadm you can view the configurations through the manifest folder
+
+cat /etc/kubernetes/manifest/kube-controller-manager.yaml
+
+
+
+Kube Scheduler
+=============
+
+it decides which pod goes on which node, it does not actually creates the pod on the ship, the kubelet does that
+
+With kubeadm too, the scheduler configurations can be found at
+
+> cat /etc/kubernetes/manifest/kube-scheduler.yaml
+
+
+Kubelet
+========
+
+Kubeadm does not deploy kubelet 
+
+The kubelet constantly monitors to state of the pod and containers in its node, and reportes the kube api-server
+
+Kube Proxy
+=============
+
+It is a process that runs on each roles on each node
+
+
+ReplicaSet
+===========
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+	type: front-end
+spec:
+  template:
+    metadata:
+	  name: myapp-pod
+	  labels:
+	    app: myapp
+		type: front-end
+	spec:
+	  containers:
+	  - name: nginx-controller
+	    image: nginx
+  replicas: 3
+  selector:
+    matchLabels:
+	  type: front-end
+	  
+
+Deployments
+=============
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+	type: front-end
+spec:
+  template:
+    metadata:
+	  name: myapp-pod
+	  labels:
+	    app: myapp
+		type: front-end
+	spec:
+	  containers:
+	  - name: nginx-controller
+	    image: nginx
+  replicas: 3
+  selector:
+    matchLabels:
+	  type: front-end
+
+
+
+Certification Tip
+==================
+
+Create an NGINX Pod
+
+$ kubectl run nginx --image=nginx
+
+Generate POD Manifest YAML file (-o yaml). Don’t create it(–dry-run)
+
+$ kubectl run nginx --image=nginx --dry-run=client -o yaml
+
+Create a deployment
+
+$ kubectl create deployment --image=nginx nginx
+
+Generate Deployment YAML file (-o yaml). Don’t create it(–dry-run)
+
+$ kubectl create deployment --image=nginx nginx --dry-run=client -o yaml
+
+Generate Deployment YAML file (-o yaml). Don’t create it(–dry-run) with 4 Replicas (–replicas=4)
+
+$ kubectl create deployment --image=nginx nginx --dry-run=client -o yaml > nginx-deployment.yaml
+
+Save it to a file, make necessary changes to the file (for example, adding more replicas) and then create the deployment.
+
+$ kubectl create -f nginx-deployment.yaml
+
+OR
+
+In k8s version 1.19+, we can specify the –replicas option to create a deployment with 4 replicas.
+
+$ kubectl create deployment --image=nginx nginx --replicas=4 --dry-run=client -o yaml > nginx-deployment.yaml
+
+---
+
+Namespaces
+=============
+kube-system
+default
+kube-public
+
+$ kubectl create -f pod-definition.yml
+
+$ kubectl create -f pod-definition.yaml --namespace=dev
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  namespace: dev
+  labels:
+    app: myapp
+	type: front-end
+spec:
+  containers:
+  - name: nginx-container
+  image: nginx
+  
+
+Switch to a namespace permenenty:
+
+$ kubectl config set-context $(kubectl config current-context) --namespace=dev
+$ kubectl config set-context $(kubectl config current-context) --namespace=prod
+
+Ressource Quota
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: compute-quota
+  namespace: dev
+spec:
+  hard:
+    pods: "10"
+	requests.cpu: "4"
+	requests.memory: 5Gi
+	limits.cpu: "10"
+	limits.memory: 10Gi
+	
+
+Namespaces on service name
+
+kubernetes.default.svc.cluster.local
+
+cluster.local - hostname of the kubernetes cluster
+svc - service sub domain
+default -  namespace
+kubernetes - object name
+
+
+
+SERVICES
+===========
+
+NodePort
+-------
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  namespace: dev
+  labels:
+    app: myapp
+	type: front-end
+spec:
+  containers:
+  - name: nginx-container
+  image: nginx
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+spec:
+  type: NodePort
+  ports:
+  - targetPort: 80
+    port: 80
+	nodePort: 30008
+  selector:
+    app: myapp
+	type: front-end
+
+ClusterIP
+---------
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: back-end
+spec:
+  type: ClusterIP
+  ports:
+  - targetPort: 80
+    port: 80
+
+  selector:
+    app: myapp
+	type: back-end
+---
+
+
+
+Load Balancer
+==============
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: myapp-service
+spec:
+  type: LoadBalancer
+  ports:
+  - targetPort: 80
+    port: 80
+	nodePort: 30008
+  selector:
+    app: myapp
+	type: front-end
+	
+	
+Imperative vs DEclarative
+-==========================
+

@@ -1,0 +1,6 @@
+KodeKloud
+================
+
+
+Create a Linux user with non interactive shell
+#adduser mark -s /sbin/nologin

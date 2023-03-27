@@ -1,0 +1,156 @@
+Other Topics
+----------------
+
+To practice more on JSON PATH with hands-on Labs check out the lab exercises in this course:
+
+https://kodekloud.com/p/json-path-quiz
+
+
+In the upcoming lecture we will explore some advanced commands with kubectl utility. But that requires JSON PATH. 
+If you are new to JSON PATH queries get introduced to it first by going through the lectures and practice tests available here.
+
+https://kodekloud.com/p/json-path-quiz
+
+Once you are comfortable head back here:
+
+I also have some JSON PATH exercises with Kubernetes Data Objects. Make sure you go through these:
+
+https://mmumshad.github.io/json-path-quiz/index.html#!/?questions=questionskub1
+
+https://mmumshad.github.io/json-path-quiz/index.html#!/?questions=questionskub2
+
+
+
+How to JSON PATH in KubeCtl ?
+-------------------------
+
+1- Indifity the kubectl commands
+
+2- Familiarize with JSON output with -o json-path-quiz
+
+3- Form the JSON PATH query
+	.items[0].spec.containers[0].image
+	
+4- Use the JSON PATH query with the kubectl command
+	kubectl get pods -o=jsonpath='{ .items[0].spec.containers[0].image }'
+	
+JSON PATH query evaluator : jsonpath.com
+
+
+https://github.com/json-path/JsonPath
+
+
+
+$.prizes[?(@.year == 2014)].laureates[*].firstname
+
+
+kubernetes json paths examples
+-------------------------------
+
+
+> kubectl get nodes -o=jsonpath='{.items[*].metadata.name}'
+> kubectl get pods -o=jsonpath='{ .items[0].spec.containers[0].image }'
+> kubectl get pods -o=jsonpath='{ .items[*].status.nodeInfo.architecture }'
+> kubectl get pods -o=jsonpath='{ .items[0].status.capacity.cpu }'
+
+these queries can be merged
+
+> kubectl get nodes -o=jsonpath='{.items[*].metadata.name}{.items[0].status.capacity.cpu}'
+
+Formating options for jsonpath queries.
+Adding a new line {"\n"} for the new line
+
+> kubectl get nodes -o=jsonpath='{.items[*].metadata.name} {"\n"} {.items[*].status.capacity.cpu}'
+
+
+Loops - Range
+
+FOR EACH NODE
+	PRINT NODE NAME \t PRINT CPU COUNT \n
+END FOR
+
+'{range .items[*]}
+  {.metadata.name}{"\t"}{.status.capacity.cpu}{"\n"}
+{end}'
+
+serialize it into a single line
+> kubectl get nodes -o=jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.capacity.cpu}{"\n"}{end}'
+
+Custom colums
+
+kubectl get nodes -o=custom-columns=<COLUMN NAME>:<JSON PATH>
+
+> kubectl get nodes -o=custom-columns=NODE:.metadata.name
+
+> kubectl get nodes -o=custom-columns=NODE:.metadata.name, CPU:.status.capacity.cpu
+
+JSONPATHs can also be used for sorting objects
+
+> kubectl get nodes --sort-by= .metadata.name 
+
+> kubectl get nodes --sort-by= .status.capacity.cpu
+
+JSON PATH IN KUBERNETES
+--------------------
+
+
+Hostnames : $.items[*].metadata.name
+
+kubectl get nodes -o=jsonpath='{$.items[*].metadata.name}'
+
+kubectl get nodes -o=jsonpath='{.items[*].metadata.name}' > /opt/outputs/node_names.txt
+
+
+
+osImages
+
+$.items[*].status.nodeInfo.osImage
+
+kubectl get nodes -o=jsonpath='{$.items[*].status.nodeInfo.osImage}{"\n"}'
+
+
+$.users[*].name
+
+ kubectl config view --kubeconfig=/root/my-kube-config -o=jsonpath='{$.users[*].name}'
+ 
+ 
+Sorting disks by capacity
+
+
+$.items[*].spec.capacity.storage
+
+kubectl get pv -o=jsonpath='{$.items[*].spec.capacity.storage}'
+
+kubectl get pv --sort-by=.spec.capacity.storage
+
+NAME       CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+pv-log-4   40Mi       RWX            Retain           Available                                   39m
+pv-log-1   100Mi      RWX            Retain           Available                                   39m
+pv-log-2   200Mi      RWX            Retain           Available                                   39m
+pv-log-3   300Mi      RWX            Retain           Available                                   39m
+
+
+Sorting columns
+
+kubectl get pv --sort-by=.spec.capacity.storage -o=custom-columns=NAME:.metadata.name,CAPACITY:.spec.capacity.storage
+kubectl get pv --sort-by=.spec.capacity.storage -o=custom-columns=NAME:.metadata.name,CAPACITY:.spec.capacity.storage > /opt/outputs/pv-and-capacity-sorted.txt
+
+
+To view a config file
+kubectl config view --kubeconfig=my-kube-config -o json
+
+
+Filter on a specific user
+$.contexts[?(@.context.user=='aws-user')].name
+kubectl config view --kubeconfig=my-kube-config -o jsonpath="{.contexts[?(@.context.user=='aws-user')].name}" > /opt/outputs/aws-context-name
+
+
+
+Labs
+----
+
+
+kubectl -n admin2406 get deployments --sort-by=.items[*].metadata.name -o=custom-columns=DEPLOYMENT:$.items[*].metadata.name,CONTAINER_IMAGE:$.items[*].spec[*].spec.containers[*].image,READY_REPLICAS:$.items[*].status.readyReplicas,NAMESPACE:$.items[*].metadata.namespace
+
+
+kubectl -n admin2406 get deployments -o=custom-columns=DEPLOYMENT:.items.metadata.name,CONTAINER_IMAGE:.items.spec.spec.containers.image,READY_REPLICAS:.items.status.readyReplicas,NAMESPACE:.items.metadata.namespace

@@ -1,0 +1,287 @@
+OS Upgrades
+==============
+
+kube-controller-manager --pod-eviction-timeout=5m0s ...
+
+> kubectl drain node-1
+Doing this node is cordoned, meanning unschedullable
+> kubectl cordon node-2
+
+After maintenance, you may need to uncordon the node to make pods to be scheduled back on it
+
+> kubectl uncordon node-1
+
+Kubernetes Software Versions
+---------------------------------
+
+version can be got from
+> kubectl get nodes
+
+References
+
+https://kubernetes.io/docs/concepts/overview/kubernetes-api/
+
+Here is a link to kubernetes documentation if you want to learn more about this topic (You don’t need it for the exam though):
+
+https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
+
+https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api_changes.md
+
+
+Cluster Upgrade Introduction
+-----------------------------
+
+kube-apiserver*
+controller-manager
+kube-scheduler
+kubelet
+kube-proxy
+kubectl
+
+Must all have the same software version
+
+ETCD Cluster and CoreDNS can have different version
+
+
+No component should be at a version higher than the kube-apiserver*.
+controller-manager and kube-scheduler can be at one version below the kube-apiserver*
+kubelet and kube-proxy can be at two version lower than the kube-apiserver*
+
+The kubectl can be at one version above or below or even equal
+
+Upgrade the cluster one minor version at a time
+
+kubeadm
+
+> kubeadm upgrade plan
+> kubeadm upgrade apply
+
+1- Upgrade master node
+2- Upgrade the worker
+
+Steps upgrading from v1.11 to v1.12
+------------------------------------
+0- Drain and cordon node
+> kubectl drain node01 --ignore-daemonsets
+> kubectl cordon node01
+
+1- Upgrade the kubeadm
+> apt-get upgrade -y kubeadm=1.12.0-00
+
+2- Upgrade the cluster with the kubeadm command got from the kubeadm upgrade plan
+> kubeadm upgrade apply v1.12.0
+Once done, the control plan components are done
+
+3- Upgrade the kubelets on masternode
+> apt-get upgrade -y kubelet=1.12.0-00
+
+once upgraded, restart the kubelet
+> systemctl restart kubelet
+
+4- Drain the worker nodes one after the other
+> kubectl drain node-1
+
+5- Upgrade the kubeadm and kubelet
+> apt-get upgrade -y kubeadm=1.12.0-00
+> apt-get upgrade -y kubelet=1.12.0-00
+
+Update the node configuration
+> kubeadm upgrade node config --kubelet-version v1.12.0
+
+Restart the kubelet service
+> systemctl restart kubelet
+
+6- uncordon the node
+> kubectl uncordon node-1
+
+kubeadm upgrade apply v1.19.16
+
+Labs
+------
+
+
+On the controlplane node, run the command run the following commands:
+
+> apt update
+This will update the package lists from the software repository.
+
+> apt install kubeadm=1.20.0-00
+This will install the kubeadm version 1.20
+
+> kubeadm upgrade apply v1.20.0
+This will upgrade kubernetes controlplane. Note that this can take a few minutes.
+
+> apt install kubelet=1.20.0-00 
+This will update the kubelet with the version 1.20.
+
+You may need to restart kubelet after it has been upgraded.
+Run: 
+> systemctl restart kubelet
+
+---
+
+On the node01 node, run the command run the following commands:
+
+If you are on the master node, run ssh node01 to go to node01
+
+
+> apt update
+This will update the package lists from the software repository.
+
+
+> apt install kubeadm=1.20.0-00
+This will install the kubeadm version 1.20
+
+
+> kubeadm upgrade node
+This will upgrade the node01 configuration.
+
+
+> apt install kubelet=1.20.0-00 
+This will update the kubelet with the version 1.20.
+
+
+You may need to restart kubelet after it has been upgraded.
+Run: 
+> systemctl restart kubelet
+
+
+Type exit or enter CTL + d to go back to the controlplane node.
+
+
+Backup and Restore Methods
+==============================
+
+- Resource Configuration, to be stored on GitHub
+kubectl get all --all-namespaces -o yaml > all-deploy-services.yaml
+
+Tools like VELERO can help take backups of the kubernetes cluster
+
+- ETCD Cluster
+Stored in master, when configuring ETCD, --data-dir is made mentionned as --data-dir=/var/lib/etcd
+This directory must be configured as to be backedup
+
+Snapshots can be taken:
+> ETCDCTL_API=3 etcdctl \
+	snapshot save snapshot.db
+	
+You can view the status of the snapshot with this command
+> ETCDCTL_API=3 etcdctl \
+	snapshot status snapshot.db
+
+To restore ETCD
+1- Stop the kube-apiserver
+> service kube-apiserver stop
+
+2. Restore
+> ETCDCTL_API=3 etcdctl \
+	snapshot restore snapshot.db \
+		--data-dir /var/lib/etcd-from-backup
+
+Then configure the etcd.service to use the new configuration directory
+> vi etcd.service
+	--data-dir=/var/lib/etcd-from-backup
+
+> systemctl daemon-reload
+> service etcd restart
+
+3. Start the kube-apiserver
+> service kube-apiserver start
+
+NB: For all ETCDCTL commands, set the certificates
+
+> ETCDCTL_API=3 etcdctl  \
+	snapshot save snapshot.db	\
+	--endpoints https://127.0.0.1:2379	\
+	--cacert=/etc/kubernetes/pki/etcd/ca.crt	\
+	--cert=/etc/kubernetes/pki/etcd/healthcheck-client.crt	\
+	--key /etc/kubernetes/pki/etcd/healthcheck-client.key
+
+WORKING WITH ETCDCTL
+
+ 
+etcdctl is a command line client for etcd.
+
+In all our Kubernetes Hands-on labs, the ETCD key-value database is deployed as a static pod on the master. 
+The version used is v3.
+
+To make use of etcdctl for tasks such as back up and restore, make sure that you set the ETCDCTL_API to 3.
+
+
+You can do this by exporting the variable ETCDCTL_API prior to using the etcdctl client. This can be done as follows:
+
+export ETCDCTL_API=3
+
+On the Master Node:
+
+
+To see all the options for a specific sub-command, make use of the -h or –help flag.
+
+
+For example, if you want to take a snapshot of etcd, use:
+
+etcdctl snapshot save -h and keep a note of the mandatory global options.
+
+Since our ETCD database is TLS-Enabled, the following options are mandatory:
+
+–cacert                verify certificates of TLS-enabled secure servers using this CA bundle
+
+–cert                    identify secure client using this TLS certificate file
+
+–endpoints=[127.0.0.1:2379] This is the default as ETCD is running on master node and exposed on localhost 2379.
+
+–key                  identify secure client using this TLS key file
+
+
+For a detailed explanation on how to make use of the etcdctl command line tool and work with the -h flags, check out the solution video for the Backup and Restore Lab.
+
+00:00:09 etcd --advertise-client-urls=https://10.55.19.9:2379 \
+--cert-file=/etc/kubernetes/pki/etcd/server.crt \
+--client-cert-auth=true \
+--data-dir=/var/lib/etcd \
+--initial-advertise-peer-urls=https://10.55.19.9:2380 \
+--initial-cluster=controlplane=https://10.55.19.9:2380 \
+--key-file=/etc/kubernetes/pki/etcd/server.key \
+--listen-client-urls=https://127.0.0.1:2379,https://10.55.19.9:2379 \
+--listen-metrics-urls=http://127.0.0.1:2381 \
+--listen-peer-urls=https://10.55.19.9:2380 \
+--name=controlplane \
+--peer-cert-file=/etc/kubernetes/pki/etcd/peer.crt \
+--peer-client-cert-auth=true \
+--peer-key-file=/etc/kubernetes/pki/etcd/peer.key \
+--peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt \
+--snapshot-count=10000 \
+--trusted-ca-file=/etc/kubernetes/pki/etcd/ca.crt
+
+Good export
+=============
+ETCDCTL_API=3 etcdctl \
+--endpoints=https://[127.0.0.1]:2379 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+snapshot save /opt/etcd-backup.db
+
+Good Restore 
+=============
+
+TCDCTL_API=3 etcdctl  --data-dir /var/lib/etcd-from-backup \
+snapshot restore /opt/snapshot-pre-boot.db
+
+Next, update the /etc/kubernetes/manifests/etcd.yaml:
+
+We have now restored the etcd snapshot to a new path on the controlplane - /var/lib/etcd-from-backup, so, the only change to be made in the YAML file, is to change the hostPath for the volume called etcd-data from old directory (/var/lib/etcd) to the new directory /var/lib/etcd-from-backup.
+
+  volumes:
+  - hostPath:
+      path: /var/lib/etcd-from-backup
+      type: DirectoryOrCreate
+    name: etcd-data
+
+
+https://kubernetes.io/docs/tasks/administer-cluster/configure-upgrade-etcd/#backing-up-an-etcd-cluster
+
+https://github.com/etcd-io/website/blob/main/content/en/docs/v3.5/op-guide/recovery.md
+
+https://www.youtube.com/watch?v=qRPNuT080Hk
+

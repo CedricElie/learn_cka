@@ -1,0 +1,21 @@
+---------- Logging ------------
+Install metric server
+
+$git clone https://github.com/kubernetes-incubator/metric-server.git
+$git clone https://github.com/kodekloudhub/kubernetes-metrics-server.git
+
+$kubectl create -f deploy/1.8+/
+
+After installing the metric server, you can trigger commands like :
+
+$kubectl top node
+$kubectl top pod
+To view cluster node ressource level
+
+
+$kuebctl logs -f event-simulator-pod
+
+In case you have a pod with multiple images inside, 
+you have to specify which image you want to index
+
+$kubectl logs -f event-simulator-pod event-simulator

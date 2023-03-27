@@ -1,0 +1,251 @@
+================	STORAGE		===============
+
+
+docker storage
+when install docker it creates : 
+/var/lib/docker
+  aufs
+  container
+  image
+  *volumes
+  
+Volume mounts, takes a volumes from the /var/lib/docker/data_volume to the container
+> docker run -v data_volume:/var/lib/mysql mysql
+
+Bind mounts, takes a volume from external mount point to the container
+> docker run -v /data/mysql:/var/lib/mysql mysql
+or
+> docker run --mount type=bind,source=/data/mysql,target=/var/lib/mysql mysql
+
+Docker uses the storage driver to do all the layered architecture
+ex AUFS, ZFS, BTRFS, Device Mapper, Overlay, Overlay2
+
+Container Storage Interface
+---------------------------
+
+It defines at set of RPC that will be called by the container orchestrator
+
+Volumes
+--------
+
+Volumes in kubernetes
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: random-number-generator
+spec:
+  containers:
+  - image: alpine
+    name: alpine
+    command: ["/bin/sh","-c"]
+    args: ["shuf -i 0-100 -n >> /opt/number.out"]
+    volumeMounts:
+    - mountPath: /opt
+      name: data-volume
+  volumes:
+  - name: data-volume
+    hostPath:
+      path: /data
+      type: Directory
+---
+
+Persistent volumeMounts
+-----------------------
+
+pv-definition.yaml
+---
+apiversion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-vol1
+spec:
+  accessModes:
+      - ReadWriteOnce
+  capacity:
+      storage: 1Gi
+  hostPath:
+    path: /tmp/data
+
+---
+
+> kubectl create -f pv-definition.yaml
+
+> kubectl get persistentvolume
+
+
+AccessModes define how the volumes are mounted on the nodes
+
+ReanOnlyMany
+ReadWriteOnce
+ReadWriteMany
+
+
+
+Persistent Volume Claims
+------------------------
+
+Binding between PVC and PV is done based on:
+  Capacity
+  Access Access
+  Volume Mode 
+  Storage class 
+  Selector
+
+pvc-definition.yaml
+---
+
+apiVerison: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: myclaim
+spec:
+  accessModes:
+      - ReadWriteOnce
+  resources:
+      request:
+        storage: 500Mi
+---
+
+> kubectl create -f pvc-definition.yaml
+
+When you delete a pvc what happens to the PV, by default it is set to Retain, so it has to be deleted by the administrator
+Setting it as Delete, will make that, as soon as the PVC is deleted, the underlining PV will also be deleted
+Setting it as Recycle, in this cas the data in the data volume will be cleaned before making it avaialable to other pods
+
+Once you create a PVC use it in a POD definition file by specifying the PVC Claim name under persistentVolumeClaim section in the volumes section like this:
+
+ 
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: mypod
+spec:
+  containers:
+    - name: myfrontend
+      image: nginx
+      volumeMounts:
+      - mountPath: "/var/www/html"
+        name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: myclaim
+ 
+
+The same is true for ReplicaSets or Deployments. Add this to the pod template section of a Deployment on ReplicaSet.
+
+ 
+
+Reference URL: https://kubernetes.io/docs/concepts/storage/persistent-volumes/#claims-as-volumes
+
+
+PRACTICE 
+==========
+
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: webapp
+  name: webapp
+spec:
+  containers:
+  - image: kodekloud/event-simulator
+    name: webapp
+    volumeMounts:
+    - mountPath: /log
+      name: webapp-log
+  volumes:
+  - name: webapp-log
+    hostPath:
+      path: /var/log/webapp
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-log
+spec:
+  accessModes:
+    - ReadWriteMany
+  capacity:
+    storage: 100Mi
+  hostPath:
+    path: /pv/log
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: claim-log-1
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Mi
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: webapp
+  name: webapp
+spec:
+  containers:
+  - image: kodekloud/event-simulator
+    name: webapp
+    volumeMounts:
+    - mountPath: /log
+      name: mypd
+  volumes:
+    - name: mypd
+      persistentVolumeClaim:
+        claimName: claim-log-1
+
+
+storage class 
+------------
+
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 500Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  creationTimestamp: null
+  labels:
+    run: nginx
+  name: nginx
+spec:
+  containers:
+  - image: nginx:alpine
+    name: nginx
+    volumeMounts:
+    - mountPath: /var/www/html
+      name: web
+  volumes:
+    - name: web
+      persistentVolumeClaim:
+        claimName: local-pvc
+
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: delayed-volume-sc
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer

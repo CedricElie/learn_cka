@@ -1,0 +1,66 @@
+kubeadm - the command to bootstrap the cluster
+kubelet - the component that runs on all of the machines in your cluster and does things like starting pods and containers
+kubectl - the command line util to talk to your cluster
+
+
+Master
+-------
+
+</> kube-apiserver
+etcd
+node-controller
+replica-controller
+
+
+Worker
+--------
+</>kubelet
+
+Container Runtime (CRI)
+
+
+Steps to setup using kubeadm
+-----------------------------
+
+
+1. Have the vms
+2. Install docker on all nodes
+3. Install kubeadm on all nodes
+4. Initialize the master
+5. Install pod network
+6. Join the worker nodes
+
+Resources
+The vagrant file used in the next video is available here:
+
+https://github.com/kodekloudhub/certified-kubernetes-administrator-course
+
+Here’s the link to the documentation:
+
+https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/
+
+
+
+iptables -A INPUT -p tcp --dport 6443 -j ACCEPT
+
+
+sudo apt-get update
+sudo apt-get install -y apt-transport-https ca-certificates curl
+
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+sudo apt-get update
+sudo apt-get install -y kubelet=1.21.0-00 kubeadm=1.21.0-00 kubectl=1.21.0-00
+sudo apt-mark hold kubelet kubeadm kubectl
+
+
+kubeadm init --apiserver-advertise-address=10.14.38.9 --apiserver-cert-extra-sans=controlplane --pod-network-cidr=10.244.0.0/16
+
+
+kubeadm join 10.14.38.9:6443 --token i24v1q.24so5uqalw5dciic \
+        --discovery-token-ca-cert-hash sha256:a18ee92ef0c87431cae8832823072f1d359ca79e96a5d449f98c8e0282687cd
+		
+		
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml

@@ -1,0 +1,524 @@
+------------- Rolling updates and Rollbacks ----------
+
+Rollout command
+
+> kubectl rollout status deployment/myap-deployment
+> kubectl rollout history deployment/myap-deployment
+
+Deployment strategies
+----
+
+- Recreate
+- Rolling Update (default deployment strategy)
+
+deployment-definition.yml
+---
+apiVersion:
+kind:
+metadata:
+  name: myapp-deployment
+  labels:
+    app: myapp
+	type: front-end
+spec:
+  template:
+    metadata:
+	  name: myapp-pod
+	  labels:
+	    app: myapp 
+		type: front-end
+	spec:
+	  containers:
+	  - name: nginx-container
+	    image: nginx:1.7.1
+  replicas: 3
+  selector:
+    matchLabels:
+	  type: front-end
+---
+> kubectl apply -f deployment-definition.yml
+
+> kubectl set image deployment/myap-deployment nginx=nginx:1.9.1
+This updates a deploymentm, but does not update the deployment file
+
+Rollbacks
+---------
+
+to undo a change
+> kubectl rollout undo deployment/myap-deployment
+
+Commands and arguments in docker
+--------------------------------
+
+FROM Ubuntu
+
+CMD ["sleep","5"]
+
+> docker build -t ubuntu-sleeper .
+> docker run ubuntu-sleeper
+
+Container will run for 5 sec, when CMD is finishes, container exits 
+
+To append to default SLEEP 5 hardcoded into the container, you can pass new arguments at run
+> docker run ubuntu-sleeper sleep 10
+
+ENTRYPOINT can be used instead of CMD, as it just specifies the command that will be run
+without arguments, arguments are sent at container start and appended to the entrypoint
+
+FROM ubuntu
+ENTRYPOINT["sleep"]
+
+> docker build -t ubuntu-sleeper .
+> docker run ubuntu-sleeper 10
+
+To define a default argument in case one is not sent at command line, you use both CMD and ENTRYPOINT
+
+FROM Ubuntu
+
+ENTRYPOINT["sleep"]
+
+CMD["5"]
+
+if you start the container with an argument, this will override the CMD instruction
+
+You can override the default entry point
+> docker run --entrypoint sleep2.0 ubuntu-sleeper 10
+
+Command and Arguments in Kubernetes
+--------------------------------------
+
+pod-definition.yaml
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ubuntu-sleeper-pod
+spec:
+  containers:
+    - name: ubuntu-sleeper
+	  image: ubuntu-sleeper
+	  command: ["sleep2.0"]
+	  args: ["10"]
+
+---
+command overrides the ENTRYPOINT
+args overrides the CMD in docker 
+
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: ubuntu-sleeper-3 
+spec:
+  containers:
+  - name: ubuntu
+    image: ubuntu
+    command:
+      - "sleep"
+      - "1200"
+---
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: webapp-green
+  labels:
+      name: webapp-green 
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    args: ["--color", "green"]
+	
+---
+
+Configure Environment Variables in Application
+-----------------------------------------------
+
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: webapp-green
+  labels:
+      name: webapp-green 
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    ports:
+      - containerPort: 8080
+    env:
+	  - name: APP_COLOR
+	    value: pink
+
+---
+
+ConfigMaps and Secrets can also be used
+
+env:
+  - name: APP_COLOR
+    valueFrom:
+	  configMapKeyRef:
+	    name: app-config
+		key: APP_COLOR
+	  
+volumes:
+- name: app-config-volumes
+  configMap:
+    name: app-config
+	
+---
+
+ConfigMaps
+-----
+Imperative:
+> kubectl create configmap \
+	<config-name> --form-literal=<key>=<value>
+
+> kubectl create configmap \
+	app-config --from-literal=APP_COLOR=blue \
+				--from-literal=APP_COLOR=blue
+				
+kubectl create configmap
+	<conf-name> --from-file=<path-to-file>
+
+kubectl create configmap \
+	app-config --from-file=app_config.properties
+
+
+declarative:
+
+config-map.yml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+data:
+  APP_COLOR: blue
+  APP_MODE: prod
+  
+---
+> kubectl create -f config-map.yaml
+
+Adding the configmap to the pod definition 
+
+pod-with-configmap.yaml
+---
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: webapp-green
+  labels:
+      name: webapp-green 
+spec:
+  containers:
+  - name: simple-webapp
+    image: kodekloud/webapp-color
+    ports:
+      - containerPort: 8080
+    envFrom:
+	  - configMapRef:
+	        name: app-config
+---
+
+> kubectl create -f pod-with-configmap.yaml
+
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: webapp-color
+  name: webapp-color
+  namespace: default
+spec:
+  containers:
+  - envFrom:
+    - configMapRef:
+         name: webapp-config-map
+    image: kodekloud/webapp-color
+    name: webapp-color
+
+
+Secrets
+--------
+
+Imperative:
+> kubect create secret generic \
+	<secret-name> --from-literal=<key>=<value>
+	
+> kubectl create secret generic \
+	app-secret --from-literal=DB_Host=mysql \
+	app-secret --from-literal=DB_User=root \
+	app-secret --from-literal=DB_Password=passwrd 
+
+kubectl create secret generic
+	<conf-name> --from-file=<path-to-file>
+
+kubectl create secret generic \
+	app-secret --from-file=app_secret.properties
+
+
+Declarative:
+
+secret-data.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+data:
+  DB_Host: mysql
+  DB_User: root
+  DB_Password: paswrd
+  
+---
+> kubectl create -f secret-data.yaml
+
+secret values (mysql, root, paswrd) my be inputted in an encoded format
+
+echo -n 'mysql' | base64
+bX1zcWw=
+echo -n 'root' | base64
+cm9vdA==
+echo -n 'paswrd' | base64
+cGFzd3JK
+
+Now take these to the secret file
+
+secret-data.yaml
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secret
+data:
+  DB_Host: bX1zcWw=
+  DB_User: cm9vdA==
+  DB_Password: cGFzd3JK
+  
+---
+> kubectl create -f secret-data.yaml
+
+To view the hashed values details in a secret
+> kubectl get secrets
+
+> kubectl get secret app-secret -o yaml
+
+To decode the hashed values
+
+echo -n 'cGFzd3JK' | base64 --decode
+
+pod-definition.yaml [BAD]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    name: webapp-color
+  name: webapp-color
+  namespace: default
+spec:
+  containers:
+  - name: webapp-color
+    image: kodekloud/webapp-color
+    ports:
+	  - containerPort: 8080
+    envFrom:
+      - SecretRef:
+            name: app-secret
+---
+
+kubectl create -f pod-definition.yaml
+
+Injecting secret as env variables
+
+envFrom:
+  - secretRef:
+      name: app-config
+	  
+env:
+  - name: DB_Password
+    valueFrom:
+	  secretKeyRef:
+	    name: app-secret
+		key: DB_Password
+
+volumes:
+- name: app-secret-volume
+  secret:
+    secretName: app-secret
+
+--
+Special case on secret as mount files
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: db-secret
+data:
+  DB_Host: c3FsMDE=
+  DB_User: cm9vdA==
+  DB_Password: cGFzc3dvcmQxMjM=
+---
+apiVersion: v1 
+kind: Pod 
+metadata:
+  labels:
+    name: webapp-pod
+  name: webapp-pod
+  namespace: default 
+spec:
+  containers:
+  - image: kodekloud/simple-webapp-mysql
+    imagePullPolicy: Always
+    name: webapp
+    envFrom:
+    - secretRef:
+        name: db-secret
+---
+
+
+MultiContainer pods
+--------------------
+
+
+apiVersion: v1 
+kind: Pod 
+metadata:
+  labels:
+    name: simple-webapp
+  name: simple-webapp
+  namespace: default 
+spec:
+  containers:
+  - name: simple-webapp
+    image: simple-webapp
+	ports:
+	  - containerPort: 8080
+  - name: log-agent
+    image: log-agent
+
+---
+
+apiVersion: v1 
+kind: Pod 
+metadata:
+  name: yellow
+spec:
+  containers:
+  - name: lemon
+    image: busybox
+    command:
+      - "sleep"
+      - "1000"
+  - name: gold
+    image: redis
+
+--- sidecar
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: app
+  namespace: elastic-stack
+  labels:
+    name: app
+spec:
+  containers:
+  - name: app
+    image: kodekloud/event-simulator
+    volumeMounts:
+    - mountPath: /log
+      name: log-volume
+
+  - name: sidecar
+    image: kodekloud/filebeat-configured
+    volumeMounts:
+    - mountPath: /var/log/event-simulator/
+      name: log-volume
+
+  volumes:
+  - name: log-volume
+    hostPath:
+      # directory location on host
+      path: /var/log/webapp
+      # this field is optional
+      type: DirectoryOrCreate
+
+---
+
+There are 3 common patterns, when it comes to designing multi-container PODs. 
+The first and what we just saw with the logging service example is known as a side car pattern. 
+The others are the adapter and the ambassador pattern.
+
+But these fall under the CKAD curriculum and are not required for the CKA exam. 
+So we will be discuss these in more detail in the CKAD course.
+
+InitContainers
+==============
+Init Containers
+================
+
+In a multi-container pod, each container is expected to run a process that stays alive as long as the POD’s lifecycle. 
+For example in the multi-container pod that we talked about earlier that has a web application and logging agent, 
+both the containers are expected to stay alive at all times. 
+The process running in the log agent container is expected to stay alive as long as the web application is running. 
+If any of them fails, the POD restarts.
+
+ 
+But at times you may want to run a process that runs to completion in a container. 
+For example a process that pulls a code or binary from a repository that will be used by the main web application. 
+That is a task that will be run only one time when the pod is first created. 
+Or a process that waits for an external service or database to be up before the actual application starts. 
+That’s where initContainers comes in.
+
+An initContainer is configured in a pod like all other containers, except that it is specified inside a initContainers section, like this:
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: myapp-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
+  initContainers:
+  - name: init-myservice
+    image: busybox
+    command: ['sh', '-c', 'git clone <some-repository-that-will-be-used-by-application> ;']
+ 
+
+When a POD is first created the initContainer is run, and the process in the initContainer must run to a completion before the real container hosting the application starts.
+
+You can configure multiple such initContainers as well, like how we did for multi-pod containers. In that case each init container is run one at a time in sequential order.
+
+If any of the initContainers fail to complete, Kubernetes restarts the Pod repeatedly until the Init Container succeeds.
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: myapp-pod
+  labels:
+    app: myapp
+spec:
+  containers:
+  - name: myapp-container
+    image: busybox:1.28
+    command: ['sh', '-c', 'echo The app is running! && sleep 3600']
+  initContainers:
+  - name: init-myservice
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup myservice; do echo waiting for myservice; sleep 2; done;']
+  - name: init-mydb
+    image: busybox:1.28
+    command: ['sh', '-c', 'until nslookup mydb; do echo waiting for mydb; sleep 2; done;']
+ 
+
+Read more about initContainers here. And try out the upcoming practice test.
+
+https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+
+
