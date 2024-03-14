@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: jekyll
+  namespace: development
+  labels:
+    app.kubernetes.io/name: MyApp
+spec:
+  containers:
+  - name: jekyll
+    image: kodekloud/jekyll-serve
+    labels:
+      run: "jekyll"
+    volumeMounts:
+      - name: site
+        mountPath: /site
+  initContainers:
+  - name: copy-jekyll-site
+    image: kodekloud/jekyll
+    command: ['sh', '-c', "jekyll", "new", "/site" ]
+    volumeMounts:
+      - name: site
+        mountPath: /site
+  volumes:
+    - name: site
+      persistentVolumeClaim:
+        claimName: jekyll-site
+
+--
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jekyll-site
+  namespace: development
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: local-storage
+  resources:
+    requests:
+      storage: 1Gi
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app.kubernetes.io/name: MyApp
+    run: jekyll
+  name: jekyll
+  namespace: development
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 4000
+    nodePort: 30097
+  selector:
+    app.kubernetes.io/name: MyApp
+    run: jekyll
+  type: NodePort
+
+-- 
+k config set-context developer --cluster=kubernetes --user=martin
+k config use-context developer
+context developer
+user: martin
+cluster: kubernetes
+
+--
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: development
+  name: developer-role
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["*"]
+
+--
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: developer-rolebinding
+  namespace: development
+subjects:
+- kind: User
+  name: martin
+  apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: developer-role
+  apiGroup: rbac.authorization.k8s.io
+
+--
+edit .kube/config
+
+add this in the user section
+users:
+- name: martin
+  user:
+    client-key: /root/martin.key
+    client-certificate: /root/martin.crt
+
