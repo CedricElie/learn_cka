@@ -1,3 +1,5 @@
+# Kodekloud kubernetes challenge 1
+# https://kodekloud.com/topic/lab-kubernetes-challenge-1/
 apiVersion: v1
 kind: Pod
 metadata:
@@ -105,7 +107,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 --
-edit .kube/config
+# edit .kube/config
 
 add this in the user section
 users:
