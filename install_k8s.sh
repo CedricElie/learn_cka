@@ -159,6 +159,14 @@ cp -i /etc/kubernetes/admin.conf /root/.kube/config
 echo "Installing Pod Network Add-on (Flannel)..."
 kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
 
+# It happens after installing the flannel, the coredns still dont go running, edit the cordns config map
+# kubectl -n kube-system edit configmap coredns
+# Find the Corefile data. Look for the forward . /etc/resolv.conf
+# (Recommended): Point to a public upstream DNS server
+#        forward . 8.8.8.8 8.8.4.4 {
+#           max_concurrent 1000
+#       }
+
 # --- Taint Removal for Single Node (Master can schedule pods) ---
 
 echo "Untainting the master node to allow pod scheduling..."
